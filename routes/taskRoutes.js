@@ -137,6 +137,50 @@ router.get('/tasks', async (req, res) => {
     }
 });
 
+// DELETE route to delete a task
+router.delete('/delete-task', async (req, res) => {
+    try {
+      const { taskId } = req.body;
+  
+      if (!taskId) {
+        return res.status(400).json({ message: 'Please provide a valid taskId' });
+      }
+  
+      // Find the task in the Task collection by taskId
+      const task = await Task.findOne({ taskId });
+  
+      if (!task) {
+        return res.status(404).json({ message: 'Task not found' });
+      }
+  
+      // Handle file deletion (if applicable)
+      if (task.documentURLs && task.documentURLs.length > 0) {
+        const publicIds = task.documentURLs.map((url) => {
+          // Extract public ID from the Cloudinary URL (assuming a specific format)
+          const parts = url.split('/');
+          return parts[parts.length - 1].split('.')[0];
+        });
+  
+        // Delete uploaded files from Cloudinary using public IDs
+        await Promise.all(publicIds.map((publicId) => cloudinary.uploader.destroy(publicId)));
+      }
+  
+      // Delete the task from the Task collection
+      await Task.deleteOne({ taskId });
+  
+      // Check if the task is in "Done" status before deleting from history
+      if (task.status === 'Done') {
+        // Delete the task from the TaskHistory collection
+        await TaskHistory.deleteOne({ taskId });
+      }
+  
+      res.status(200).json({ message: 'Task deleted successfully' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Error deleting task', error: err.message });
+    }
+  });
+
 
 router.get('/taskHistory', async (req, res) => {
     try {
